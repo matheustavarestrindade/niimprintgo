@@ -130,8 +130,8 @@ func (n *NiimbotPrinter) WaitPrintFinish(pageNumber int) bool {
 }
 
 func (n *NiimbotPrinter) PrintLabel(img image.Image, labelType int, labelDensity int, quantity int) {
-	if img.Bounds().Dx() != 96 || img.Bounds().Dy() >= 600 {
-		logger.LogError("Image must have 96px width and 600px height")
+	if img.Bounds().Dx() > 96 || img.Bounds().Dy() > 330 {
+		logger.LogError("Image cannot have more than 96px width and 330px height")
 		return
 	}
 

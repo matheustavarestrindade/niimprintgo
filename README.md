@@ -29,7 +29,7 @@ NiimprintGO supports a range of command-line flags to tailor the printing proces
 - `--comPort`: Specify the COM port used for the printer connection.
 - `--imagePath`: Specify the path to the image file to be printed on the label.
 
-**Image requirements**: The image must have a maximum width of 96px and a maximum height of 600px.
+**Image requirements**: The image must have a maximum width of 96px and a maximum height of 330px.
 
 Example usage:
 
