@@ -2,7 +2,6 @@ package serialsocket
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"time"
 
@@ -38,15 +37,14 @@ func (ss *SerialSocket) Connect() {
 	if ss.connection != nil {
 		ss.connection.Close()
 	}
-
 	port, err := serial.Open(ss.ComPort, &serial.Mode{
 		BaudRate: 9600,
 	})
 	if err != nil {
-		log.Fatal(err)
+		logger.LogError("Error opening serial port", ss.ComPort)
+		panic(err)
 	}
 	ss.connection = port
-	fmt.Println("Connected to", ss.ComPort)
 }
 
 func (ss *SerialSocket) Send(data []byte) {
@@ -57,11 +55,17 @@ func (ss *SerialSocket) Send(data []byte) {
 }
 
 func (ss *SerialSocket) Read() {
+
+    err := ss.connection.SetReadTimeout(200 * time.Millisecond)
+    if err != nil {
+        log.Fatal(err)
+    }
 	n, err := ss.connection.Read(ss.pktBuffer)
-	logger.LogInfo("Read", n, "bytes", ss.pktBuffer[:n])
+	logger.LogDebug("Read", n, "bytes", ss.pktBuffer[:n])
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	ss.bufferPos = 0
 	ss.bytesRead = n
 }
@@ -71,24 +75,26 @@ func (ss *SerialSocket) Close() {
 }
 
 func (ss *SerialSocket) TranscieveBlock(code int, data []packets.NiimbotPacket, responseOffset int) *packets.NiimbotPacket {
-    logger.LogInfo("Transcieve ", code, data, responseOffset)
+	logger.LogDebug("TranscieveBlock ", code, data, responseOffset)
 	responseCode := responseOffset + code
 
-	logger.LogInfo("Waiting for response code", responseCode)
+	logger.LogDebug("Waiting for response code", responseCode)
 
-	logger.LogInfo("\nSending packet block") 
-    for _, pkt := range data {
-        logger.LogInfo("Sending packet", pkt.ToBytes())
-        ss.Send(pkt.ToBytes())
-    }
-    logger.LogInfo("Sent packet block\n")
+	logger.LogDebug("\nSending packet block")
+	for _, pkt := range data {
+		logger.LogDebug("Sending packet", pkt.ToBytes())
+		ss.Send(pkt.ToBytes())
+	}
+	logger.LogDebug("Sent packet block\n")
 
 	for i := 0; i < 6; i++ {
 		for _, pkt := range ss.recv() {
 			switch int(pkt.Type) {
 			case 219:
+				logger.LogError("Error: IllegalArgument")
 				panic("Error: IllegalArgument")
 			case 0:
+				logger.LogError("Error: NotImplement")
 				panic("Error: NotImplement")
 			case responseCode:
 				return &pkt
@@ -99,17 +105,19 @@ func (ss *SerialSocket) TranscieveBlock(code int, data []packets.NiimbotPacket, 
 
 	return nil
 }
-func (ss *SerialSocket) Transcieve(code int, data []byte, responseOffset int) *packets.NiimbotPacket {
-    logger.LogInfo("Transcieve ", code, data, responseOffset)
+
+func (ss *SerialSocket) TranscieveTimeout(code int, data []byte, responseOffset int, timeout time.Duration) *packets.NiimbotPacket {
+
+	logger.LogDebug("Transcieve ", code, data, responseOffset)
 	responseCode := responseOffset + code
 
-	logger.LogInfo("Waiting for response code", responseCode)
+	logger.LogDebug("Waiting for response code", responseCode)
 	packet := packets.NiimbotPacket{
 		Type: byte(code),
 		Data: data,
 	}
 
-	logger.LogInfo("Sending packet", packet.ToBytes())
+	logger.LogDebug("Sending packet", packet.ToBytes())
 	ss.Send(packet.ToBytes())
 	for i := 0; i < 6; i++ {
 		for _, pkt := range ss.recv() {
@@ -128,18 +136,64 @@ func (ss *SerialSocket) Transcieve(code int, data []byte, responseOffset int) *p
 	return nil
 }
 
+func (ss *SerialSocket) Transcieve(code int, data []byte, responseOffset int) *packets.NiimbotPacket {
+
+	logger.LogDebug("Transcieve ", code, data, responseOffset)
+	responseCode := responseOffset + code
+
+	logger.LogDebug("Waiting for response code", responseCode)
+	packet := packets.NiimbotPacket{
+		Type: byte(code),
+		Data: data,
+	}
+
+	logger.LogDebug("Sending packet", packet.ToBytes())
+	ss.Send(packet.ToBytes())
+
+	for i := 0; i < 6; i++ {
+		for _, pkt := range ss.recv() {
+			switch int(pkt.Type) {
+			case 219:
+				panic("Error: IllegalArgument")
+			case 0:
+				panic("Error: NotImplement")
+			case responseCode:
+				return &pkt
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
+}
+
+func (ss *SerialSocket) WaitUntilCode(code int) *packets.NiimbotPacket {
+	for i := 0; i < 6; i++ {
+		for _, pkt := range ss.recv() {
+			switch int(pkt.Type) {
+			case 219:
+				panic("Error: IllegalArgument")
+			case 0:
+				panic("Error: NotImplement")
+			case code:
+				return &pkt
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+    return nil
+}
+
 func (ss *SerialSocket) readUntil(target []byte) bool {
-	logger.LogInfo("Reading until", target)
 	localBuffer := make([]byte, len(target))
 
 	for ss.bufferPos < len(ss.pktBuffer) {
-		// Shift old bytes
 		for i := 0; i < len(target)-1; i++ {
 			localBuffer[i] = localBuffer[i+1]
 		}
 		localBuffer[len(target)-1] = ss.readByteFromBuffer()
 		if bytes.Equal(localBuffer, target) {
-			logger.LogInfo("Found target")
+			logger.LogDebug("Found target", target)
 			return true
 		}
 	}
@@ -157,15 +211,14 @@ func (ss *SerialSocket) readByteFromBuffer() byte {
 
 func (ss *SerialSocket) recv() []packets.NiimbotPacket {
 	pkts := []packets.NiimbotPacket{}
+
 	for {
-		logger.LogInfo("Reading from serial socket")
 		ss.Read()
 		if ss.bytesRead <= 0 {
-			logger.LogInfo("No bytes read")
 			break
 		}
-		logger.LogInfo("Bytes read", ss.bytesRead)
-
+		logger.LogDebug("Read bytes from port", ss.bytesRead)
+		logger.LogDebug("Reading until start bytes")
 		for ss.readUntil(ss.startBytes) {
 			packet := ss.extractPacketFromBuffer()
 			if packet == nil {
@@ -181,6 +234,7 @@ func (ss *SerialSocket) recv() []packets.NiimbotPacket {
 			break
 		}
 	}
+
 	return pkts
 }
 

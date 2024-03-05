@@ -1,52 +1,101 @@
 package main
 
 import (
-	"fmt"
-	"image"
-	"log"
-	"os"
+	"flag"
 
+	"github.com/matheustavarestrindade/niimprintgo/internal/app/helpers"
 	"github.com/matheustavarestrindade/niimprintgo/internal/app/logger"
 	"github.com/matheustavarestrindade/niimprintgo/internal/app/niimbot"
 )
 
+type DefaultParameters struct {
+	LabelType    int
+	LabelDensity int
+	Quantity     int
+	ImagePath    string
+	ComPort      string
+
+	LoggerEnableDebug  bool
+	LoggerEnableInfo   bool
+	LoggerEnableError  bool
+	LoggerEnableColors bool
+}
+
+func (dp *DefaultParameters) IsValidConfig() bool {
+	if dp.ComPort == "" {
+		logger.LogError("COM port is required")
+		return false
+	}
+	if dp.LabelType > 3 || dp.LabelType < 1 {
+		logger.LogError("Invalid label type", dp.LabelType)
+		return false
+	}
+	if dp.LabelDensity > 3 || dp.LabelDensity < 0 {
+		logger.LogError("Invalid label density", dp)
+		return false
+	}
+	if dp.Quantity < 1 {
+		logger.LogError("Invalid quantity", dp.Quantity)
+		return false
+	}
+	if dp.ImagePath == "" {
+		logger.LogError("Image path is required")
+		return false
+	}
+	if !helpers.FileExists(dp.ImagePath) {
+		logger.LogError("Image file not found", dp.ImagePath)
+		return false
+	}
+	return true
+}
+
 func main() {
-    fmt.Println("Starting...")
-	printer := niimbot.NewNiimbotPrinter("COM4")
-    fmt.Println("Printer created...")
 
+	initParams := readParams() 
 
-	defaultLabelType := 1
-	defaultLabelDensity := 2
-	defaultQuantity := 1
+	logger.ConfigureLogger(initParams.LoggerEnableInfo, initParams.LoggerEnableError, initParams.LoggerEnableDebug, initParams.LoggerEnableColors)
 
-	var img image.Image
-	// Load image from file
-    fmt.Println("Loading image...")
-	file, err := os.Open("./image.jpg")
-	if err != nil {
-		log.Fatal(err)
-	}
-	img, _, err = image.Decode(file)
-	if err != nil {
-		log.Fatal(err)
+	if !initParams.IsValidConfig() {
+		return
 	}
 
-    imgWidth := img.Bounds().Dx()
-    imgHeight := img.Bounds().Dy()
-    logger.LogInfo("Loaded image with width: ", imgWidth, " and height: ", imgHeight, "px")
-    // if imgWidth != 96 || imgHeight >=600 {
-    //     fmt.Println("Image must have 96px width and 600px height max")
-    //     return
-    // }
-    if imgWidth / imgHeight > 1 {
-        fmt.Println("Image must have portrait orientation")
-        return
-    }
+	logger.LogInfo("Starting Niimprintgo...")
+	printer := niimbot.NewNiimbotPrinter(initParams.ComPort)
+
+	img := helpers.GetImageFromFilePath(initParams.ImagePath)
+	if img == nil {
+		return
+	}
+
+	logger.LogInfo("Printing label...")
+	printer.PrintLabel(img, initParams.LabelType, initParams.LabelDensity, initParams.Quantity)
+}
+
+func readParams() DefaultParameters {
+
+	initParams := DefaultParameters{}
+    debug := flag.Bool("debug", false, "Enable debug logs")
+    info := flag.Bool("info", true, "Enable info logs")
+    error := flag.Bool("error", true, "Enable error logs")
+    colors := flag.Bool("colors", true, "Enable colors in logs")
+    labelType := flag.Int("labelType", 1, "Label type")
+    labelDensity := flag.Int("labelDensity", 2, "Label density")
+    quantity := flag.Int("quantity", 1, "Quantity")
+    comPort := flag.String("comPort", "", "COM port")
+    imagePath := flag.String("imagePath", "", "Image path")
 
 
-    fmt.Println("Image loaded...")
-	printer.PrintLabel(img, defaultLabelType, defaultLabelDensity, defaultQuantity)
-    fmt.Println("Label printed...")
+	flag.Parse()
 
+    initParams.LoggerEnableDebug = *debug 
+	initParams.LoggerEnableInfo = *info 
+	initParams.LoggerEnableError = *error 
+	initParams.LoggerEnableColors = *colors 
+	initParams.LabelType = *labelType
+	initParams.LabelDensity = *labelDensity
+	initParams.Quantity = *quantity
+	initParams.ComPort = *comPort
+	initParams.ImagePath = *imagePath
+
+	return initParams
 }

@@ -3,10 +3,13 @@ package packets
 import (
 	"errors"
 	"fmt"
+
+	"github.com/matheustavarestrindade/niimprintgo/internal/app/logger"
 )
 
-var NiimbotInfoPacket = newNiimbotInfoPackets()
-var NiimbotRequestCodePacket = newNiimbotRequestCodePackets()
+var NiimbotD11InfoPacket = newNiimbotD11InfoPackets()
+var NiimbotD11RequestCodePacket = newNiimbotD11RequestCodePackets()
+var NiimbotD11ResponseCodePacket = newNiimbotD11ResponseCodePackets()
 
 type NiimbotInfoPackets struct {
 	DENSITY          int
@@ -21,7 +24,7 @@ type NiimbotInfoPackets struct {
 	HARDVERSION      int
 }
 
-func newNiimbotInfoPackets() *NiimbotInfoPackets {
+func newNiimbotD11InfoPackets() *NiimbotInfoPackets {
 	return &NiimbotInfoPackets{
 		DENSITY:          1,
 		PRINTSPEED:       2,
@@ -49,14 +52,13 @@ type NiimbotRequestCodePackets struct {
 	ALLOW_PRINT_CLEAR int
 	SET_DIMENSION     int
 	SET_QUANTITY      int
-	GET_PRINT_STATUS  int
 	SET_IMAGE         int
 	IMAGE_CLEAR       int
 	SET_IMAGE_DATA    int
     IMAGE_CONFIRM     int
 }
 
-func newNiimbotRequestCodePackets() *NiimbotRequestCodePackets {
+func newNiimbotD11RequestCodePackets() *NiimbotRequestCodePackets {
 	return &NiimbotRequestCodePackets{
 		GET_INFO:          64,
 		GET_RFID:          26,
@@ -70,12 +72,21 @@ func newNiimbotRequestCodePackets() *NiimbotRequestCodePackets {
 		ALLOW_PRINT_CLEAR: 32,
 		SET_DIMENSION:     19,
 		SET_QUANTITY:      21,
-		GET_PRINT_STATUS:  163,
 		SET_IMAGE:         131,
 		IMAGE_CLEAR:       132,
 		SET_IMAGE_DATA:    133,
         IMAGE_CONFIRM:     211,
 	}
+}
+
+type NiimbotResponseCodePackets struct {
+    PAGE_PRINT_DONE int
+}
+
+func newNiimbotD11ResponseCodePackets() *NiimbotResponseCodePackets {
+    return &NiimbotResponseCodePackets{
+        PAGE_PRINT_DONE: 224,
+    }
 }
 
 type NiimbotPacket struct {
@@ -98,19 +109,20 @@ func (np *NiimbotPacket) ToBytes() []byte {
 	return packet
 }
 
-func (np *NiimbotPacket) ToString() {
-	fmt.Println("NiimbotPacket -> Type:", np.Type, "Data:", np.Data)
+func (np *NiimbotPacket) ToString() string {
+    return fmt.Sprintf("<NiimbotPacket=Type:%d,Data:%v>", np.Type, np.Data)
 }
 
 func FromBytes(packet []byte) (*NiimbotPacket, error) {
 	if packet[0] != 0x55 || packet[1] != 0x55 {
-		fmt.Println("NiimbotPacket -> Invalid packet", packet)
+        logger.LogError("Invalid packet", packet)
 		return nil, errors.New("Invalid packet")
 	}
 	if packet[len(packet)-1] != 0xaa || packet[len(packet)-2] != 0xaa {
-		fmt.Println("NiimbotPacket -> Invalid packet", packet)
+        logger.LogError("Invalid packet", packet)
 		return nil, errors.New("Invalid packet")
 	}
+
 	np := &NiimbotPacket{
 		Type: packet[2],
 		Data: packet[4 : len(packet)-3],
@@ -123,7 +135,7 @@ func FromBytes(packet []byte) (*NiimbotPacket, error) {
 		checksum ^= int(b)
 	}
 	if byte(checksum) != packet[len(packet)-3] {
-		fmt.Println("NiimbotPacket -> Invalid checksum", packet)
+        logger.LogError("Invalid checksum", packet)
 		return nil, errors.New("Invalid checksum")
 	}
 	return np, nil
