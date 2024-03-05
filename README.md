@@ -2,6 +2,10 @@
 
 Welcome to NiimprintGO, a command-line tool designed for easy and efficient label printing with the Niimbot D11 printer. This document provides an overview of the available command-line parameters to customize your printing tasks.
 
+## Supported printers
+
+- Niimbot D11
+
 ## Installation
 
 Before using NiimprintGO, ensure that you have the Niimbot D11 printer drivers installed on your system and the printer is properly connected. For installation instructions, refer to the Niimbot D11 documentation.
@@ -16,12 +20,6 @@ NiimprintGO supports a range of command-line flags to tailor the printing proces
 - `--info`: Enable or disable info logs. (default: `true`)
 - `--error`: Enable or disable error logs. (default: `true`)
 - `--colors`: Enable or disable colors in logs. (default: `true`)
-
-Example usage:
-
-```sh
-NiimprintGO --debug=true --info=false
-```
 
 ### Printing Flags
 
